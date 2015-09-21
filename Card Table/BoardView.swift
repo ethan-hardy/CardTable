@@ -32,7 +32,7 @@ class BoardView: UIView {
         super.init(frame: frame)
     }
 
-    required init(coder aDecoder: NSCoder) {
+    required init?(coder aDecoder: NSCoder) {
         numberOfCardsInHand = 0
         isViewingTable = false
         touchIsOnTable = false
@@ -57,7 +57,6 @@ class BoardView: UIView {
         self.backgroundColor = UIColor(patternImage: UIImage(named: "crossword")!)
         
         self.userInteractionEnabled = true
-        let deckBack = UIImage(named: "backv")
         
         swipeGestureRecognizer = swipe
         
@@ -74,10 +73,17 @@ class BoardView: UIView {
         selectedCardBorder.hidden = true
         self.overlayView.addSubview(selectedCardBorder)
         
-        self.dropDownOptionMenu = DropDownOptionMenu(frame: CGRectMake(0, -0.2 * self.frame.height, self.frame.width, 0.1 * self.frame.height))
+      /*  self.dropDownOptionMenu = DropDownOptionMenu(frame: CGRectMake(0, -0.2 * self.frame.height, self.frame.width, 0.1 * self.frame.height))
         self.overlayView.addSubview(dropDownOptionMenu)
-        
+        self.dropDownOptionMenu.setupGraphics()*/
+        self.dropDownOptionMenu = DropDownOptionMenu()
+        self.dropDownOptionMenu = UINib(nibName: "DropDownOptionMenu", bundle: NSBundle.mainBundle()).instantiateWithOwner(self.dropDownOptionMenu, options: nil)[0] as! DropDownOptionMenu
+        self.addSubview(self.dropDownOptionMenu)
+        self.dropDownOptionMenu.frame = CGRectMake(0, -0.2 * self.frame.height, self.frame.width, 0.1 * self.frame.height)
+        self.dropDownOptionMenu.userInteractionEnabled = true
         self.frame.origin.y -= self.frame.height / 2
+        
+    //    showFonts()
     }
     
     func changeTableView(card:Card?) {
@@ -87,7 +93,11 @@ class BoardView: UIView {
                 if ((card) != nil) {
                     card!.frame.origin.y += self.frame.height / 2
                 }
-            })
+                }, completion: { (Bool) -> Void in
+                    if ((card) != nil && !card!.isFaceUp) {
+                        card!.flip()
+                    }
+                })
             swipeGestureRecognizer.direction = UISwipeGestureRecognizerDirection.Down
             isViewingTable = false
         }
@@ -97,7 +107,7 @@ class BoardView: UIView {
                 if ((card) != nil) {
                     card!.frame.origin.y -= self.frame.height / 2
                 }
-            })
+                })
             swipeGestureRecognizer.direction = UISwipeGestureRecognizerDirection.Up
             isViewingTable = true
         }
@@ -113,35 +123,43 @@ class BoardView: UIView {
         var cardNumber : Int
         if (deck.deckList.count != 0) {
             cardNumber = deck.deckList.lastObject as! Int
-            var card : Card = Card(cardNum: cardNumber, faceUp: false, deck: deck)
+            let card : Card = Card(cardNum: cardNumber, faceUp: false, deck: deck)
             card.userInteractionEnabled = true
             self.tableView.addSubview(card)
             
+            var selectCard : Bool = false
             if (deck.topCard != nil) {
-                deck.topCard.flip()
+                deck.topCard.image = UIImage(named: "backv")
                 self.tableView.bringSubviewToFront(deck.topCard)
-                card.center = deck.topCard.center
+                card.frame.origin = deck.topCard.frame.origin
+                if (self.dropDownOptionMenu.selectedDeck != nil && self.dropDownOptionMenu.selectedDeck!.isEqual(deck)) {
+                    selectCard = true
+                }
             }
             else {
-                card.center = deck.center
+                card.frame.origin = deck.origin
             }
             deck.deckList.removeLastObject()
             deck.topCard = card
+            if (selectCard) {
+                self.selectCardOrDeck(card)
+            }
         }
     }
     
     func selectCardOrDeck(card: Card) {
         if (card.isTopCardOfDeck) {
             selectedDeckBorder.hidden = false
-            selectedDeckBorder.setBorderSizedFrame(card.frame)
+            selectedDeckBorder.setBorderSizedFrame(card.frame.origin, isZoomSized: false)
             selectedDeckBorder.ownerDeck = card.ownerDeck
+            self.dropDownOptionMenu.selectedDeck = card.ownerDeck
         }
         else {
             selectedCardBorder.hidden = false
-            selectedCardBorder.setBorderSizedFrame(card.frame)
+            selectedCardBorder.setBorderSizedFrame(card.frame.origin, isZoomSized: false)
             selectedCardBorder.ownerCard = card
+            self.dropDownOptionMenu.selectedCard = card
         }
-        self.dropDownOptionMenu.isDroppedDown = true
         self.tableView.bringSubviewToFront(card)
     }
     
@@ -149,27 +167,47 @@ class BoardView: UIView {
         if (card) {
             selectedCardBorder.hidden = true
             selectedCardBorder.ownerCard = nil
+            self.dropDownOptionMenu.selectedCard = nil
         }
         if (orDeck) {
             selectedDeckBorder.hidden = true
             selectedDeckBorder.ownerDeck = nil
-        }
-        if (card && orDeck) {
-            self.dropDownOptionMenu.isDroppedDown = false
+            self.dropDownOptionMenu.selectedDeck = nil
         }
     }
     
-    override func touchesBegan(touches: Set<NSObject>, withEvent event: UIEvent) {
-        touchIsOnTable = true
-        self.deselectCard(true, orDeck: true)
+  /*  func showFonts() {
+        var x : CGFloat = 0.0
+        var y : CGFloat = 0.0
+        for fontFamilyName in UIFont.familyNames() {
+            for fontName in UIFont.fontNamesForFamilyName(fontFamilyName as! String) {
+                let font = UIFont(name: fontName as! String, size: 12)
+                let label = UILabel(frame: CGRectMake(x, y, 150.0, 15.0))
+                label.font = font
+                label.text = fontName as? String
+                x += 150
+                if (x + 150 > self.frame.width) {
+                    x = 0
+                    y += 15
+                }
+                self.overlayView.addSubview(label)
+            }
+        }
+    }*/
+    
+    override func touchesBegan(touches: Set<UITouch>, withEvent event: UIEvent?) {
+        if (!dropDownOptionMenu.frame.contains(touches.first!.locationInView(self))) {
+            touchIsOnTable = true
+            self.deselectCard(true, orDeck: true)
+        }
     }
     
-    override func touchesEnded(touches: Set<NSObject>, withEvent event: UIEvent) {
+    override func touchesEnded(touches: Set<UITouch>, withEvent event: UIEvent?) {
         touchIsOnTable = false
     }
     
     func addDeck() {
-        deckInstance = Deck(boardOwner: self, centerPoint: CGPointMake(self.frame.width / 2, self.frame.height / 4))
+        deckInstance = Deck(boardOwner: self, originPoint: CGPointMake(self.frame.width / 2, self.frame.height / 4))
         deckInstance.setupGraphics()
     }
     

@@ -11,13 +11,26 @@ import UIKit
 class Card: UIImageView {
 
     var lastTouch : CGPoint!
-    var cardNumber : Int!
+    var cardNumber : Int! {
+        didSet {
+            if (isFaceUp) {
+                self.image = UIImage(named: "\(cardNumber)")!
+            }
+        }
+    }
     var isFaceUp : Bool
     var isTopCardOfDeck : Bool
     var touchIsHolding : Bool
     var ownerDeck : Deck!
+    override var image : UIImage? {
+        didSet {
+            if let iSize = image?.size {
+                self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, iSize.width, iSize.height)
+            }
+        }
+    }
     
-    init(cardNum: Int, faceUp: Bool, deck: Deck) {
+    init(cardNum: Int, faceUp: Bool, deck: Deck?) {
         var img : UIImage
         cardNumber = cardNum
         isFaceUp = faceUp
@@ -27,20 +40,23 @@ class Card: UIImageView {
         if (faceUp) {
             img = UIImage(named: "\(cardNumber)")!
         }
+        else if (ownerDeck != nil) {
+            img = UIImage(named: "backv_deck")!
+        }
         else {
             img = UIImage(named: "backv")!
         }
         super.init(image: img)
     }
 
-    required init(coder aDecoder: NSCoder) {
+    required init?(coder aDecoder: NSCoder) {
         isFaceUp = false
         isTopCardOfDeck = true
         touchIsHolding = false
         super.init(coder: aDecoder)
     }
     
-    override func touchesBegan(touches: Set<NSObject>, withEvent event: UIEvent) {
+    override func touchesBegan(touches: Set<UITouch>, withEvent event: UIEvent?) {
         touchIsHolding = true
         let obj : NSObject = touches.first!
         let touch : UITouch = obj as! UITouch
@@ -54,15 +70,18 @@ class Card: UIImageView {
                     UIView.animateWithDuration(NSTimeInterval(0.2), animations: { () -> Void in
                         self.frame.size = CGSizeMake(self.frame.width * 1.15, self.frame.height * 1.15)
                         self.center = center
+                        if (self.ownerDeck.board!.dropDownOptionMenu.selectedDeck != nil && self.ownerDeck.board!.dropDownOptionMenu.selectedDeck!.isEqual(self.ownerDeck)) {
+                            self.ownerDeck.board!.selectedDeckBorder.setBorderSizedFrame(self.frame.origin, isZoomSized: true)
+                        }
+                        self.image = UIImage(named: "backv_deck_dark")
                     })
-                    self.image = UIImage(named: "backv_dark")
                     self.superview?.bringSubviewToFront(self)
                 }
             });
         }
     }
     
-    override func touchesMoved(touches: Set<NSObject>, withEvent event: UIEvent) {
+    override func touchesMoved(touches: Set<UITouch>, withEvent event: UIEvent?) {
         if (isTopCardOfDeck && !ownerDeck.isMoveEnabled) {
             self.ownerDeck.board!.drawCardFromDeck(ownerDeck)
             isTopCardOfDeck = false
@@ -78,7 +97,7 @@ class Card: UIImageView {
         let newFrame : CGRect = CGRectMake(self.frame.origin.x + deltaTouch.width, self.frame.origin.y + deltaTouch.height, self.frame.width, self.frame.height)
         var finalOrigin = self.frame.origin
         let screenRect : CGRect = CGRectMake(0, 0, self.superview!.frame.width, self.superview!.frame.height / 2)
-        if ((self.ownerDeck.board!.isViewingTable && screenRect.contains(newFrame)) || (!self.ownerDeck.board!.isViewingTable && screenRect.contains(newFrame.rectByOffsetting(dx: 0, dy: -self.ownerDeck.board!.frame.height / 2)))) {
+        if ((self.ownerDeck.board!.isViewingTable && screenRect.contains(newFrame)) || (!self.ownerDeck.board!.isViewingTable && screenRect.contains(newFrame.offsetBy(dx: 0, dy: -self.ownerDeck.board!.frame.height / 2)))) {
             //card has not hit a screen border
             finalOrigin = CGPoint(x: self.frame.origin.x + deltaTouch.width, y: self.frame.origin.y + deltaTouch.height)
             self.frame.origin = finalOrigin
@@ -90,7 +109,7 @@ class Card: UIImageView {
         }
         else {
             //the card will hit the side, but not so as to trigger a view switch
-            var ratio : CGFloat
+           /* var ratio : CGFloat
             if (newFrame.origin.x < 0) {
                 ratio = self.frame.origin.x / deltaTouch.width
             }
@@ -106,17 +125,17 @@ class Card: UIImageView {
             if (ratio > 0 && ratio <= 1) {
                 finalOrigin = CGPoint(x: self.frame.origin.x + deltaTouch.width * ratio, y: self.frame.origin.y + deltaTouch.height * ratio)
             }
-            self.frame.origin = finalOrigin
+            self.frame.origin = finalOrigin*/
         }
         lastTouch = currentTouch
         if (ownerDeck.isMoveEnabled) {
-            ownerDeck.center = finalOrigin
+            ownerDeck.origin = finalOrigin
         }
         
-        if (self.ownerDeck.board!.selectedCardBorder.ownerCard != nil && self.ownerDeck.board!.selectedCardBorder.ownerCard!.isEqual(self)) {
+        if (self.ownerDeck.board!.selectedCardBorder.ownerCard != nil && self.ownerDeck.board!.selectedCardBorder.ownerCard!.isEqual(self)) { //if this is the selected card
             self.ownerDeck.board!.selectedCardBorder.setBorderPositionedOrigin(self.frame.origin)
         }
-        else if (self.ownerDeck.board!.selectedDeckBorder.ownerDeck != nil && self.ownerDeck.board!.selectedDeckBorder.ownerDeck!.isEqual(self.ownerDeck)) {
+        else if (self.ownerDeck.board!.selectedDeckBorder.ownerDeck != nil && self.ownerDeck.board!.selectedDeckBorder.ownerDeck!.isEqual(self.ownerDeck) && self.isTopCardOfDeck) { //if this is the top card of the selected deck
             self.ownerDeck.board!.selectedDeckBorder.setBorderPositionedOrigin(self.frame.origin)
         }
     }
@@ -132,21 +151,35 @@ class Card: UIImageView {
         }
     }
     
-    override func touchesEnded(touches: Set<NSObject>, withEvent event: UIEvent) {
+    override func touchesEnded(touches: Set<UITouch>, withEvent event: UIEvent?) {
+        var zoomedOut : Bool = false
         if (ownerDeck.isMoveEnabled && self.isTopCardOfDeck) {
+            zoomedOut = true
             ownerDeck.isMoveEnabled = false
-            self.image = UIImage(named: "backv")
             let center = self.center
             UIView.animateWithDuration(NSTimeInterval(0.2), animations: { () -> Void in
                 self.frame.size = CGSizeMake(self.frame.width / 1.15, self.frame.height / 1.15)
                 self.center = center
+                if (self.ownerDeck.board!.dropDownOptionMenu.selectedDeck != nil && self.ownerDeck.board!.dropDownOptionMenu.selectedDeck!.isEqual(self.ownerDeck)) {
+                    self.ownerDeck.board!.selectedDeckBorder.setBorderSizedFrame(self.frame.origin, isZoomSized: false)
+                }
+                self.image = UIImage(named: "backv_deck")
             })
         }
-        if (touchIsHolding) {
+        if (touchIsHolding && !zoomedOut) {
             self.ownerDeck.board!.selectCardOrDeck(self)
             touchIsHolding = false
         }
     }
+    
+    
+    override func removeFromSuperview() {
+        if (self.ownerDeck.board!.dropDownOptionMenu.selectedCard != nil && self.ownerDeck.board!.dropDownOptionMenu.selectedCard!.isEqual(self)) {
+            self.ownerDeck.board?.deselectCard(true, orDeck: false)
+        }
+        super.removeFromSuperview()
+    }
+    
     
    /* func drawBorder() {
         UIGraphicsBeginImageContext(self.frame.size)

@@ -18,7 +18,7 @@ class ViewController: UIViewController {
         //  self.view.backgroundColor = UIColor.blueColor();
     }
     
-    required init(coder aDecoder: NSCoder) {
+    required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
         //  self.view.backgroundColor = UIColor.blueColor();
     }

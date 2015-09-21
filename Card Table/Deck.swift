@@ -14,17 +14,17 @@ class Deck : NSObject {
     var topCard : Card!
     var lastTouch : CGPoint!
     var isMoveEnabled : Bool
-    var center : CGPoint
+    var origin : CGPoint
     weak var board : BoardView?
     
-    init(boardOwner: BoardView, centerPoint: CGPoint) {
+    init(boardOwner: BoardView, originPoint: CGPoint) {
         deckList = NSMutableArray()
         for cardNumber in 1...52 {
             deckList.addObject(cardNumber);
         }
         isMoveEnabled = false
         board = boardOwner
-        center = centerPoint
+        origin = originPoint
     }
     
     func setupGraphics() {
@@ -32,13 +32,34 @@ class Deck : NSObject {
         board?.drawCardFromDeck(self)
     }
     
+    func sizeOfDeck() -> Int {
+        return deckList.count
+    }
+    
     func shuffle() {
-        var deckHold : NSMutableArray = NSMutableArray()
+        let deckHold : NSMutableArray = NSMutableArray()
         while (deckList.count > 0) {
             let randomInt = Int(arc4random() % UInt32(deckList.count))
             deckHold.addObject(deckList.objectAtIndex(randomInt))
             deckList.removeObjectAtIndex(randomInt)
         }
         deckList = deckHold
+        refreshTopCard()
+    }
+    
+    func insertCardAtIndex(cardNumber: Int, index: Int) { //if you pass a card already in the deck, you will end up with two of them
+        deckList.insertObject(cardNumber, atIndex: index)
+        if (index == sizeOfDeck()-1) {
+            refreshTopCard()
+        }
+    }
+    
+    private func refreshTopCard() {
+        if (self.topCard != nil) {
+            let cardNum = self.topCard.cardNumber
+            self.topCard.cardNumber = self.deckList.lastObject as! Int
+            self.deckList.replaceObjectAtIndex(sizeOfDeck()-1, withObject: cardNum)
+            self.deckList.removeLastObject()
+        }
     }
 }
